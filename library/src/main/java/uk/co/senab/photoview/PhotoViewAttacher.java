@@ -69,6 +69,9 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
 
     private boolean mAllowParentInterceptOnEdge = true;
     private boolean mBlockParentIntercept = false;
+    private boolean mInsideBoundsEnabled = false;
+
+    private final RectF mInsideImageBounds = new RectF();
 
     private static void checkZoomLevels(float minZoom, float midZoom,
                                         float maxZoom) {
@@ -254,6 +257,11 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
     public RectF getDisplayRect() {
         checkMatrixBounds();
         return getDisplayRect(getDrawMatrix());
+    }
+
+    public void setInsideImageBounds(RectF rectF) {
+        mInsideBoundsEnabled = true;
+        mInsideImageBounds.set(rectF);
     }
 
     @Override
@@ -734,8 +742,12 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
         final float height = rect.height(), width = rect.width();
         float deltaX = 0, deltaY = 0;
 
-        final int viewHeight = getImageViewHeight(imageView);
-        if (height <= viewHeight) {
+        RectF bounds = mInsideBoundsEnabled
+                ? mInsideImageBounds
+                : new RectF(0, 0, getImageViewWidth(imageView), getImageViewHeight(imageView));
+
+        final float viewHeight = getImageViewHeight(imageView);
+        if (height <= bounds.height()) {
             switch (mScaleType) {
                 case FIT_START:
                     deltaY = -rect.top;
@@ -747,14 +759,14 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
                     deltaY = (viewHeight - height) / 2 - rect.top;
                     break;
             }
-        } else if (rect.top > 0) {
-            deltaY = -rect.top;
-        } else if (rect.bottom < viewHeight) {
-            deltaY = viewHeight - rect.bottom;
+        } else if (rect.top > bounds.top) {
+            deltaY = bounds.top - rect.top;
+        } else if (rect.bottom < bounds.bottom) {
+            deltaY = bounds.bottom - rect.bottom;
         }
 
-        final int viewWidth = getImageViewWidth(imageView);
-        if (width <= viewWidth) {
+        final float viewWidth = getImageViewWidth(imageView);
+        if (width <= bounds.width()) {
             switch (mScaleType) {
                 case FIT_START:
                     deltaX = -rect.left;
@@ -767,11 +779,11 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
                     break;
             }
             mScrollEdge = EDGE_BOTH;
-        } else if (rect.left > 0) {
+        } else if (rect.left > bounds.left) {
             mScrollEdge = EDGE_LEFT;
-            deltaX = -rect.left;
-        } else if (rect.right < viewWidth) {
-            deltaX = viewWidth - rect.right;
+            deltaX = bounds.left - rect.left;
+        } else if (rect.right < bounds.right) {
+            deltaX = bounds.right - rect.right;
             mScrollEdge = EDGE_RIGHT;
         } else {
             mScrollEdge = EDGE_NONE;
