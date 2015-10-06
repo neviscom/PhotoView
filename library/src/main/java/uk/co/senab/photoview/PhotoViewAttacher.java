@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2011, 2012 Chris Banes.
- *
+ * <p/>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * <p/>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,6 +22,7 @@ import android.graphics.Matrix;
 import android.graphics.Matrix.ScaleToFit;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.support.annotation.NonNull;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -70,6 +71,7 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
     private boolean mAllowParentInterceptOnEdge = true;
     private boolean mBlockParentIntercept = false;
     private boolean mInsideBoundsEnabled = false;
+    private boolean mIsFlingEnabled = false;
 
     private final RectF mInsideImageBounds = new RectF();
 
@@ -376,6 +378,7 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
         }
 
         ImageView imageView = getImageView();
+
         mSuppMatrix.postTranslate(dx, dy);
         checkAndDisplayMatrix();
 
@@ -406,6 +409,10 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
     @Override
     public void onFling(float startX, float startY, float velocityX,
                         float velocityY) {
+        if (!mIsFlingEnabled) {
+            return;
+        }
+
         if (DEBUG) {
             LogManager.getLogger().d(
                     LOG_TAG,
@@ -704,10 +711,14 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
         }
     }
 
+    public Matrix getSuppMatrix() {
+        return mSuppMatrix;
+    }
+
     /**
      * Helper method that simply checks the Matrix, and then displays the result
      */
-    private void checkAndDisplayMatrix() {
+    public void checkAndDisplayMatrix() {
         if (checkMatrixBounds()) {
             setImageViewMatrix(getDrawMatrix());
         }
@@ -742,9 +753,7 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
         final float height = rect.height(), width = rect.width();
         float deltaX = 0, deltaY = 0;
 
-        RectF bounds = mInsideBoundsEnabled
-                ? mInsideImageBounds
-                : new RectF(0, 0, getImageViewWidth(imageView), getImageViewHeight(imageView));
+        RectF bounds = getInsideBounds(imageView);
 
         final float viewHeight = getImageViewHeight(imageView);
         if (height <= bounds.height()) {
@@ -792,6 +801,28 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
         // Finally actually translate the matrix
         mSuppMatrix.postTranslate(deltaX, deltaY);
         return true;
+    }
+
+    private RectF getInsideBounds(@NonNull ImageView imageView) {
+        return mInsideBoundsEnabled
+                ? mInsideImageBounds
+                : new RectF(0, 0, getImageViewWidth(imageView), getImageViewHeight(imageView));
+    }
+
+    public void toCenter() {
+        final RectF rect = getDisplayRect(getDrawMatrix());
+        if (rect == null) {
+            return;
+        }
+
+        final int viewWidth = getImageViewWidth(getImageView());
+        final int viewHeight = getImageViewHeight(getImageView());
+
+        float deltaX = (viewWidth - rect.width()) / 2F - rect.left;
+        float deltaY = (viewHeight - rect.height()) / 2F - rect.top;
+
+        mSuppMatrix.postTranslate(deltaX, deltaY);
+        setImageViewMatrix(getDrawMatrix());
     }
 
     /**
@@ -881,8 +912,9 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
             return;
         }
 
-        final float viewWidth = getImageViewWidth(imageView);
-        final float viewHeight = getImageViewHeight(imageView);
+        RectF insideBounds = getInsideBounds(imageView);
+        final float viewWidth = insideBounds.width();
+        final float viewHeight = insideBounds.height();
         final int drawableWidth = d.getIntrinsicWidth();
         final int drawableHeight = d.getIntrinsicHeight();
 
@@ -904,12 +936,13 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
         } else if (mScaleType == ScaleType.CENTER_INSIDE) {
             float scale = Math.min(1.0f, Math.min(widthScale, heightScale));
             mBaseMatrix.postScale(scale, scale);
-            mBaseMatrix.postTranslate((viewWidth - drawableWidth * scale) / 2F,
+            mBaseMatrix.postTranslate(
+                    (viewWidth - drawableWidth * scale) / 2F,
                     (viewHeight - drawableHeight * scale) / 2F);
 
         } else {
             RectF mTempSrc = new RectF(0, 0, drawableWidth, drawableHeight);
-            RectF mTempDst = new RectF(0, 0, viewWidth, viewHeight);
+            RectF mTempDst = getDestRect(drawableWidth, drawableHeight);
 
             switch (mScaleType) {
                 case FIT_CENTER:
@@ -935,6 +968,20 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
         }
 
         resetMatrix();
+    }
+
+    private RectF getDestRect(int drawableWidth, int drawableHeight) {
+        float destHeight;
+        float destWidth;
+        if (drawableHeight < drawableWidth) {
+            destHeight = mInsideImageBounds.height();
+            destWidth = destHeight / drawableHeight * drawableWidth;
+        } else {
+            destWidth = mInsideImageBounds.width();
+            destHeight = destWidth / drawableWidth * drawableHeight;
+        }
+
+        return new RectF(0, 0, destWidth, destHeight);
     }
 
     private int getImageViewWidth(ImageView imageView) {
