@@ -765,7 +765,11 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
                     deltaY = viewHeight - height - rect.top;
                     break;
                 default:
-                    deltaY = (viewHeight - height) / 2 - rect.top;
+                    if (rect.top < bounds.top) {
+                        deltaY = bounds.top - rect.top;
+                    } else if (rect.bottom > bounds.bottom) {
+                        deltaY = bounds.bottom - rect.bottom;
+                    }
                     break;
             }
         } else if (rect.top > bounds.top) {
@@ -784,7 +788,11 @@ public class PhotoViewAttacher implements IPhotoView, View.OnTouchListener,
                     deltaX = viewWidth - width - rect.left;
                     break;
                 default:
-                    deltaX = (viewWidth - width) / 2 - rect.left;
+                    if (rect.left < bounds.left) {
+                        deltaX = bounds.left - rect.left;
+                    } else if (rect.right > bounds.right) {
+                        deltaX = bounds.right - rect.right;
+                    }
                     break;
             }
             mScrollEdge = EDGE_BOTH;
